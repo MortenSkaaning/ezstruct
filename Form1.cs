@@ -269,6 +269,20 @@ namespace ezstruct
 
         private LinkedListNode<SByteAlloc> AllocByteField(SField field, int fieldsIdx, LinkedList<SByteAlloc> allocs)
         {
+            if (allocs.Count == 0)
+            {
+                Debug.Assert(!field.m_IsBitField);
+                SByteAlloc fieldAlloc = new SByteAlloc();
+                fieldAlloc.m_BeginBit = 0;
+                fieldAlloc.m_EndBit = field.m_SizeBits;
+                fieldAlloc.m_FieldIdx = fieldsIdx;
+                fieldAlloc.m_BitAllocs = new List<SBitAlloc>();
+                Debug.Assert(fieldAlloc.m_EndBit % m_BitsPerByte == 0);
+
+                LinkedListNode<SByteAlloc> fieldAllocNode = allocs.AddLast(fieldAlloc);
+                return fieldAllocNode;
+            }
+
             // Find first big-enough, aligned free space between allocations. Greedy approach guaranteed to work.. todo: prove that ;)
             int OldNumsAllocs = allocs.Count;
             for (LinkedListNode<SByteAlloc> cur = allocs.First; cur.Next != null && cur != allocs.Last; cur = cur.Next)
@@ -304,8 +318,8 @@ namespace ezstruct
 
             // no in-between space available. Simply add to end because we always start with the largest allocations.
             {
-                System.Diagnostics.Debug.Assert(allocs.Count == OldNumsAllocs);
-                System.Diagnostics.Debug.Assert(allocs.Count != 0);
+                Debug.Assert(allocs.Count == OldNumsAllocs);
+                Debug.Assert(allocs.Count != 0);
 
                 int freeBeginBit = allocs.Last.Value.m_EndBit;
                 int alignBeginBit = AlignUpward(freeBeginBit, field.m_AlignBits);
@@ -375,7 +389,7 @@ namespace ezstruct
             foreach (IDiaSymbol sym in results)
             {
                 //if (sym.name == "C")
-                if (sym.name == "_TP_CALLBACK_ENVIRON_V1::<unnamed-type-u>::<unnamed-type-s>")                
+                //if (sym.name == "_TP_CALLBACK_ENVIRON_V1::<unnamed-type-u>::<unnamed-type-s>")                
                 {
                     StructInfo structInfo = new StructInfo();
                     structInfo.m_name = sym.name;
@@ -464,6 +478,7 @@ namespace ezstruct
 
         private LinkedList<SByteAlloc> ComputeAllocs(List<SField> sourceFields)
         {
+            // Sort largest byte allocations first so we can take a greedy approach.
             List<SField> permutedFields = DeepClone( sourceFields );
             permutedFields = permutedFields.OrderByDescending(elm => elm.m_AlignBits).ToList();
 
@@ -481,41 +496,27 @@ namespace ezstruct
                 }                
             }
 
-
-            permutedFields.RemoveAll(isFieldStatic); // don't feed bad data,
-
             LinkedList<SByteAlloc> allocs = new LinkedList<SByteAlloc>();
             if (sourceFields.Count == 0)
                 return allocs;
 
-            // Add first field.
+            // Allocate byte fields.
+            foreach ( SField permutedField in permutedFields)
             {
-                SByteAlloc fieldAlloc = new SByteAlloc();
-                fieldAlloc.m_BeginBit = 0;
-                fieldAlloc.m_EndBit = permutedFields[0].m_SizeBits;
-                Debug.Assert(fieldAlloc.m_EndBit % m_BitsPerByte == 0);
-                fieldAlloc.m_FieldIdx = 0;
-                fieldAlloc.m_BitAllocs = new List<SBitAlloc>();
-
-                allocs.AddLast(fieldAlloc);
-            }
-
-            for (int i = 1; i != permutedFields.Count; ++i)
-            {
-                if (permutedFields[i].m_IsBitField)
+                if (permutedField.m_IsBitField)
                     continue;
-                AllocByteField(permutedFields[i], toNormalOrder[permutedFields[i]], allocs);
+
+                AllocByteField(permutedField, toNormalOrder[permutedField], allocs);
             }
 
-            // Allocate small fields.
+            // Allocate bit fields.
             List<LinkedListNode<SByteAlloc>> bitAllocSubset = new List<LinkedListNode<SByteAlloc>>(); // cache of allocation nodes used for small allocations.            
-            for (int i = 0; i != permutedFields.Count; ++i)
+            foreach (SField bitField in permutedFields)
             {
-                SField bitField = permutedFields[i];
                 if (!bitField.m_IsBitField)
                     continue;
 
-                System.Diagnostics.Debug.Assert(bitField.m_SizeBits > 0);
+                Debug.Assert(bitField.m_SizeBits > 0);
 
                 // put smallField in free smallAllocs space.
                 bool enoughSpace = false;
@@ -746,6 +747,34 @@ namespace ezstruct
             allocs = out_allocs;
         }
 
+        private void PaintStructDetailViews(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            DataGridView view = sender as DataGridView;
+            if (view == null)
+                return;
+
+            foreach (DataGridViewRow row in view.Rows)
+            {
+                DataGridViewCell firstCell = row.Cells[0];
+
+                if (firstCell.Value.ToString() == "[byte pad]")
+                {
+                    foreach (DataGridViewCell cell in row.Cells)
+                    {
+                        cell.Style.BackColor = Color.LightYellow;
+                    }
+                }
+
+                if (firstCell.Value.ToString() == "[bit pad]")
+                {
+                    foreach (DataGridViewCell cell in row.Cells)
+                    {
+                        cell.Style.BackColor = Color.LightYellow;
+                    }
+                }
+            }
+        }
+
         private void AddDetailRow(DetailRow row, System.Windows.Forms.DataGridView gridView)
         {
             List<object> dat = new List<object>();
@@ -830,7 +859,6 @@ namespace ezstruct
                 LinkedList<SByteAlloc> layout = GetGeneratedLayoutFromStructInfo(info);
 
 
-/*
                 int totalFreeBits;
                 int instanceBits;
                 LinkedList<SByteAlloc> paddedLayout;
@@ -838,11 +866,10 @@ namespace ezstruct
                 AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
                 text_compilerDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
                 PopulateGridView(paddedLayout, paddedInfo, compilerDataView);
-*/
 
 
 
-                PopulateGridView(layout, info, compilerDataView);
+                //PopulateGridView(layout, info, compilerDataView);
             }
 
             // display computed layout.
@@ -850,18 +877,16 @@ namespace ezstruct
                 LinkedList<SByteAlloc> layout = ComputeAllocs(info.m_fields);
 
 
-/*
-                int totalFreeBits = 234;
+                int totalFreeBits;
                 int instanceBits;
                 LinkedList<SByteAlloc> paddedLayout;
                 StructInfo paddedInfo;
                 AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
                 text_computedDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
                 PopulateGridView(paddedLayout, paddedInfo, computedLayoutView);
-*/
 
 
-                PopulateGridView(layout, info, computedLayoutView);
+//                PopulateGridView(layout, info, computedLayoutView);
             }
         }
     }

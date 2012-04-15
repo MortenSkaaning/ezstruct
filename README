@@ -1,1 +1,8 @@
-ezstruct is a tool for struct layout optimization. Supports MS .pdb data files.:
+ezstruct is a tool for struct layout optimization. 
+
+Purpose is to model, analyze and optimize the bitlayout of stucts.
+Supports MS .pdb debugger info files.
+
+== Install ==
+
+I needed to run  "regsvr32 C:\Program Files\Microsoft Visual Studio 10.0\DIA SDK\bin\msdia100.dll" from an Administrator account to be able to add "msdia100.dll" as project assembly COM reference.

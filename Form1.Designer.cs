@@ -72,6 +72,7 @@
             this.compilerDataView.ShowEditingIcon = false;
             this.compilerDataView.Size = new System.Drawing.Size(535, 347);
             this.compilerDataView.TabIndex = 2;
+            this.compilerDataView.CellPainting += new System.Windows.Forms.DataGridViewCellPaintingEventHandler(this.PaintStructDetailViews);
             // 
             // text_compilerDataTotals
             // 
@@ -95,6 +96,7 @@
             this.computedLayoutView.ShowEditingIcon = false;
             this.computedLayoutView.Size = new System.Drawing.Size(514, 347);
             this.computedLayoutView.TabIndex = 4;
+            this.computedLayoutView.CellPainting += new System.Windows.Forms.DataGridViewCellPaintingEventHandler(this.PaintStructDetailViews);
             // 
             // text_computedDataTotals
             // 
