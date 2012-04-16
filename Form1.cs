@@ -125,12 +125,12 @@ namespace ezstruct
             public bool m_IsUnionMember;
             public bool m_IsArrayIndexType;
 
-            public UdtKind m_udtKind;
-
             // temps
             public string m_typeName;
             public string m_locationType;
             public string m_symTagEnum;
+            public string m_udtKind;
+            public string m_dataKind;
 
             public SField()
             {
@@ -139,15 +139,17 @@ namespace ezstruct
                 m_IsBitField = false;
                 m_IsBool = false;
                 m_IsStatic = false;
-                m_locationType = string.Empty;
                 m_Name = string.Empty;
                 m_SizeBits = 0;
-                m_typeName = string.Empty;
                 m_IsPadding = false;
-                m_udtKind = UdtKind.UdtClass;
-                m_symTagEnum = string.Empty;
                 m_IsUnionMember = false;
                 m_IsArrayIndexType = false;
+
+                m_locationType = string.Empty;
+                m_symTagEnum = string.Empty;
+                m_typeName = string.Empty;
+                m_udtKind = string.Empty;
+                m_dataKind = string.Empty;
             }          
             
             // TODO split into things should be filtered out of lowlevel and things that cannot be processed.
@@ -155,9 +157,8 @@ namespace ezstruct
             {
                 if (m_IsStatic 
                     || m_SizeBits == 0 
-                    || m_udtKind == UdtKind.UdtUnion 
                     || m_IsUnionMember
-                    || m_IsBitField && (m_SizeBits >= m_BitsPerByte) ) // TODO arbitrary sized bitfields.
+                    || m_IsBitField && (m_SizeBits > m_BitsPerByte) ) // TODO arbitrary sized bitfields.
                     return false;
                 return true;
             }            
@@ -356,6 +357,27 @@ namespace ezstruct
             return false;
         }
 
+        private bool VerifyFieldsValid(List<SField> fields, ref string reason)
+        {
+            foreach( var f1 in fields)
+            {
+                foreach (var f2 in fields)
+                {
+                    if (f1 == f2)
+                        continue;
+
+                    // for some reason union types are not properly detected.
+                    // see .PDB symbol "_NT_TIB".
+                    if (!f1.m_IsBitField && !f2.m_IsBitField && f1.m_byteOffset == f2.m_byteOffset)
+                    {
+                        reason = "fields \"" + f1.m_Name + "\" and \"" + f2.m_Name + "\" share byteoffset (" + f1.m_byteOffset + ").";
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
         private void Form1_Load(object sender, EventArgs BLABLABLBLBLBLBe)
         {
             //string filename = "";
@@ -389,7 +411,7 @@ namespace ezstruct
             foreach (IDiaSymbol sym in results)
             {
                 //if (sym.name == "C")
-                //if (sym.name == "_TP_CALLBACK_ENVIRON_V1::<unnamed-type-u>::<unnamed-type-s>")                
+                if (sym.name == "SrcHeader")                
                 {
                     StructInfo structInfo = new StructInfo();
                     structInfo.m_name = sym.name;
@@ -402,7 +424,7 @@ namespace ezstruct
                     sym.findChildren(SymTagEnum.SymTagNull, null, 0, out children);
                     foreach (IDiaSymbol child in children)
                     {
-                        if (false && child.name != "SetName")
+                        if (false && child.name != "FiberData")
                             continue;
 
                         SField field = new SField();
@@ -441,6 +463,8 @@ namespace ezstruct
                             field.m_SizeBits += m_BitsPerByte * (int)child.type.length;
                             field.m_AlignBits = field.m_SizeBits;
 
+                            string baseType = ((BasicType)child.type.baseType).ToString();
+
                             if (child.type.arrayIndexType != null)
                             {
                                 field.m_IsArrayIndexType = true;
@@ -448,12 +472,13 @@ namespace ezstruct
                             }
                         }
 
-                        field.m_udtKind = (UdtKind)child.udtKind;
                         field.m_IsUnionMember = IsUnionMember(child);
                         field.m_byteOffset = child.offset;
-                        field.m_Name = child.name;
-                        field.m_locationType = ((LocationType)child.locationType).ToString();
+                        field.m_Name = (child.name == null) ? "[null]" : child.name;
 
+                        field.m_locationType = ((LocationType)child.locationType).ToString();
+                        field.m_udtKind = ((UdtKind)child.udtKind).ToString();
+                        field.m_dataKind = ((DataKind)child.dataKind).ToString();
                         if (field.m_symTagEnum == string.Empty )
                         {
                             field.m_symTagEnum = ((SymTagEnum)child.symTag).ToString();
@@ -470,10 +495,6 @@ namespace ezstruct
             }
 
             PopulateDataTable(m_table, structs);
-
-
-
-            int ad;
         }
 
         private LinkedList<SByteAlloc> ComputeAllocs(List<SField> sourceFields)
@@ -839,6 +860,14 @@ namespace ezstruct
             Trace.WriteLine("selected " + ref_info.m_name);
 
             StructInfo info = DeepClone(ref_info);
+
+            // Check if field layout is valid.
+            string rejectReason = null;
+            if (!VerifyFieldsValid(info.m_fields, ref rejectReason))
+            {
+                text_Warnings.Text = rejectReason;
+                return;
+            }
 
             // Reject unfit fields.
             StringBuilder b = new StringBuilder();
