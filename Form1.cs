@@ -153,13 +153,32 @@ namespace ezstruct
             }          
             
             // TODO split into things should be filtered out of lowlevel and things that cannot be processed.
-            public bool FitForLowLevel()
+            public bool FitForLowLevel( ref string reason)
             {
-                if (m_IsStatic 
-                    || m_SizeBits == 0 
-                    || m_IsUnionMember
-                    || m_IsBitField && (m_SizeBits > m_BitsPerByte) ) // TODO arbitrary sized bitfields.
+                if (m_IsStatic )
+                {
+                    reason = "Static fields not supported.";
                     return false;
+                }
+
+                if (m_SizeBits == 0)
+                {
+                    reason = "Size is 0 bits.";
+                    return false;
+                }
+
+                if (m_IsUnionMember)
+                {
+                    reason = "Unions not supported.";
+                    return false;
+                }
+
+                if( m_IsBitField && (m_SizeBits > m_BitsPerByte) )
+                {
+                    reason = "Bitfields larger than " + m_BitsPerByte + " not supported.";
+                    return false;
+                }
+
                 return true;
             }            
         }
@@ -195,16 +214,30 @@ namespace ezstruct
             InitializeComponent();
 
             m_table = CreateOverViewTable();
+            overViewGrid.DataSource = m_table;
 
-            // create columns.
+            // Init layout data views.
             foreach (var field in typeof(DetailRow).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
             {
                 compilerDataView.Columns.Add(field.Name, field.Name);
                 computedLayoutView.Columns.Add(field.Name, field.Name);
             }
 
-            //bindingSource1.DataSource = m_table;
-            overViewGrid.DataSource = m_table;
+            // Init field details data view.
+            foreach (var field in typeof(SField).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+            {
+                fieldsDetailView.Columns.Add(field.Name, field.Name.Replace("m_", "") );
+
+                // Make number columns small.
+                if(    field.Name.Contains("m_Is") 
+                    || field.Name.ToLower().Contains("size") 
+                    || field.Name.ToLower().Contains("byte")
+                    || field.Name.ToLower().Contains("bit")
+                    )
+                {
+                    fieldsDetailView.Columns[field.Name].Width = 50;
+                }
+            }
         }
 
         void PopulateDataTable(DataTable table, List<StructInfo> fields)
@@ -366,11 +399,11 @@ namespace ezstruct
                     if (f1 == f2)
                         continue;
 
-                    // for some reason union types are not properly detected.
+                    // for some reason union types are not properly detected. Only allow bitfields to share offset.
                     // see .PDB symbol "_NT_TIB".
-                    if (!f1.m_IsBitField && !f2.m_IsBitField && f1.m_byteOffset == f2.m_byteOffset)
+                    if ( !(f1.m_IsBitField && f2.m_IsBitField) && (f1.m_byteOffset == f2.m_byteOffset) )
                     {
-                        reason = "fields \"" + f1.m_Name + "\" and \"" + f2.m_Name + "\" share byteoffset (" + f1.m_byteOffset + ").";
+                        reason = "Fields \"" + f1.m_Name + "\" and \"" + f2.m_Name + "\" share byteoffset (" + f1.m_byteOffset + "). Unions not properly detected or supported!";
                         return false;
                     }
                 }
@@ -411,7 +444,7 @@ namespace ezstruct
             foreach (IDiaSymbol sym in results)
             {
                 //if (sym.name == "C")
-                if (sym.name == "SrcHeader")                
+//                if (sym.name == "SrcHeader")                
                 {
                     StructInfo structInfo = new StructInfo();
                     structInfo.m_name = sym.name;
@@ -424,7 +457,7 @@ namespace ezstruct
                     sym.findChildren(SymTagEnum.SymTagNull, null, 0, out children);
                     foreach (IDiaSymbol child in children)
                     {
-                        if (false && child.name != "FiberData")
+                        if (false && child.name != "grFlags")
                             continue;
 
                         SField field = new SField();
@@ -587,15 +620,11 @@ namespace ezstruct
         private LinkedList<SByteAlloc> GetGeneratedLayoutFromStructInfo(StructInfo info)
         {
             LinkedList<SByteAlloc> byteAllocs = new LinkedList<SByteAlloc>();
-
             Dictionary<int, LinkedListNode<SByteAlloc>> bitsToSharedByte = new Dictionary<int, LinkedListNode<SByteAlloc>>(); // map byteOffset to byte alloc containing bits.
 
             for (int i = 0; i != info.m_fields.Count; ++i)
             {
                 SField field = info.m_fields[i];
-
-                if (field.m_IsStatic) // todo filter data outside.
-                    continue;
 
                 if (field.m_IsBitField)
                 {
@@ -606,12 +635,8 @@ namespace ezstruct
                     {
                         // continue for last bit in byteOffset byte.
                         SByteAlloc sharedByteAlloc = bitsToSharedByte[field.m_byteOffset].Value;
-
                         bitAlloc.m_BeginBit = sharedByteAlloc.m_BitAllocs.Last().m_EndBit;
-
                         sharedByteAlloc.m_BitAllocs.Add(bitAlloc);
-
-
                         Debug.Assert(sharedByteAlloc.m_FieldIdx == -1);
                     }
                     else
@@ -621,7 +646,8 @@ namespace ezstruct
                         byteAlloc.m_EndBit = byteAlloc.m_BeginBit + m_BitsPerByte;
                         byteAlloc.m_FieldIdx = -1; // indicate bit alloctions.
                         byteAlloc.m_BitAllocs = new List<SBitAlloc>();
-                        byteAlloc.m_BitAllocs.Add(bitAlloc);                        
+                        byteAlloc.m_BitAllocs.Add(bitAlloc);
+                        Debug.Assert(byteAlloc.m_BeginBit < byteAlloc.m_EndBit);
 
                         LinkedListNode<SByteAlloc> allocNode = byteAllocs.AddLast(byteAlloc);
                         bitsToSharedByte.Add(field.m_byteOffset, allocNode);
@@ -640,6 +666,7 @@ namespace ezstruct
                     byteAlloc.m_EndBit = byteAlloc.m_BeginBit + field.m_SizeBits;
                     byteAlloc.m_FieldIdx = i;
                     byteAlloc.m_BitAllocs = new List<SBitAlloc>();
+                    Debug.Assert(byteAlloc.m_BeginBit < byteAlloc.m_EndBit);
                     
                     byteAllocs.AddLast(byteAlloc);
                 }
@@ -685,6 +712,7 @@ namespace ezstruct
                     padBits.m_BeginBit = highestEndBit;
                     padBits.m_EndBit = alloc.Value.m_EndBit;
                     padBits.m_FieldIdx = out_info.m_fields.Count-1;
+                    Debug.Assert(padBits.m_BeginBit < padBits.m_EndBit);
 
                     out_allocNode.Value.m_BitAllocs.Add(padBits);
 
@@ -717,9 +745,10 @@ namespace ezstruct
 
                     SByteAlloc padByte = new SByteAlloc();
                     padByte.m_BeginBit = freeBeginBit;
-                    padByte.m_EndBit = freeEndBit;
-                    Debug.Assert(freeEndBit % m_MinAlignment == 0);
+                    padByte.m_EndBit = freeEndBit;                    
                     padByte.m_FieldIdx = out_info.m_fields.Count - 1;
+                    Debug.Assert(padByte.m_BeginBit < padByte.m_EndBit);
+                    Debug.Assert(freeEndBit % m_MinAlignment == 0);
 
                     out_allocs.AddLast(padByte);
 
@@ -754,9 +783,10 @@ namespace ezstruct
 
                     SByteAlloc padByte = new SByteAlloc();
                     padByte.m_BeginBit = freeEndBit;
-                    padByte.m_EndBit = alignEndBit;
-                    Debug.Assert( padByte.m_EndBit % m_MinAlignment == 0);
+                    padByte.m_EndBit = alignEndBit;                    
                     padByte.m_FieldIdx = out_info.m_fields.Count - 1;
+                    Debug.Assert(padByte.m_BeginBit < padByte.m_EndBit);
+                    Debug.Assert(padByte.m_EndBit % m_MinAlignment == 0);
 
                     out_allocs.AddLast(padByte);
 
@@ -796,17 +826,26 @@ namespace ezstruct
             }
         }
 
-        private void AddDetailRow(DetailRow row, System.Windows.Forms.DataGridView gridView)
+        private void AddRowToView<T>(T row, System.Windows.Forms.DataGridView gridView)
         {
             List<object> dat = new List<object>();
-            foreach (var field in typeof(DetailRow).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+            foreach (var field in typeof(T).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
             {
                 dat.Add(field.GetValue(row));
             }
             gridView.Rows.Add(dat.ToArray());
         }
 
-        private void PopulateGridView(LinkedList<SByteAlloc> allocs, StructInfo info, System.Windows.Forms.DataGridView gridView )
+        private void PopulateFieldDetailsView(StructInfo info, System.Windows.Forms.DataGridView gridView )
+        {
+            gridView.Rows.Clear();
+            foreach (SField field in info.m_fields)
+            {
+                AddRowToView(field, gridView);
+            }
+        }
+
+        private void PopulateGridView(LinkedList<SByteAlloc> allocs, StructInfo info, System.Windows.Forms.DataGridView gridView)
         {
             gridView.Rows.Clear();
             foreach (SByteAlloc byteAlloc in allocs)
@@ -825,7 +864,7 @@ namespace ezstruct
                         row.Name = field.m_Name;
                         row.ByteOffset = field.m_byteOffset;
 
-                        AddDetailRow(row, gridView);
+                        AddRowToView(row, gridView);
                     }
                 }
                 else
@@ -841,12 +880,17 @@ namespace ezstruct
                     row.Name = field.m_Name;
                     row.ByteOffset = field.m_byteOffset;
 
-                    AddDetailRow(row, gridView);
+                    AddRowToView(row, gridView);
                 }
             }
         }
 
         private void overViewGrid_SelectionChanged(object sender, EventArgs e)
+        {
+            ProcessSelectedStruct();
+        }
+
+        private void ProcessSelectedStruct()
         {
             if (overViewGrid.SelectedRows.Count == 0)
             {
@@ -861,6 +905,23 @@ namespace ezstruct
 
             StructInfo info = DeepClone(ref_info);
 
+            // Show field details
+            PopulateFieldDetailsView(ref_info, fieldsDetailView);
+
+            // Reject unfit fields.
+            StringBuilder b = new StringBuilder();
+            for (int i = info.m_fields.Count - 1; i >= 0; --i )
+            {
+                SField field = info.m_fields[i];
+                string reason = string.Empty;
+                if( !field.FitForLowLevel(ref reason) )
+                {
+                    b.AppendLine("Field \"" + field.m_Name + "\" disregarded:" + reason );
+                    info.m_fields.RemoveAt(i);
+                }
+            }
+            text_Warnings.Text = b.ToString();
+
             // Check if field layout is valid.
             string rejectReason = null;
             if (!VerifyFieldsValid(info.m_fields, ref rejectReason))
@@ -869,54 +930,75 @@ namespace ezstruct
                 return;
             }
 
-            // Reject unfit fields.
-            StringBuilder b = new StringBuilder();
-            for (int i = info.m_fields.Count - 1; i >= 0; --i )
-            {
-                SField field = info.m_fields[i];
-                if (!field.FitForLowLevel())
-                {
-                    b.AppendLine("field \"" + field.m_Name + "\" disregarded!");
-                    info.m_fields.RemoveAt(i);
-                }
-            }
-            text_Warnings.Text = b.ToString();
-
-
             // display layout from debug data source
+            if (chk_createCompiledLayout.Checked)
             {
                 LinkedList<SByteAlloc> layout = GetGeneratedLayoutFromStructInfo(info);
-
-
-                int totalFreeBits;
-                int instanceBits;
-                LinkedList<SByteAlloc> paddedLayout;
-                StructInfo paddedInfo;
-                AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
-                text_compilerDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
-                PopulateGridView(paddedLayout, paddedInfo, compilerDataView);
-
-
-
-                //PopulateGridView(layout, info, compilerDataView);
+                
+                if (chk_compiledLayoutPadding.Checked)
+                {
+                    int totalFreeBits;
+                    int instanceBits;
+                    LinkedList<SByteAlloc> paddedLayout;
+                    StructInfo paddedInfo;
+                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
+                    text_compilerDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
+                    PopulateGridView(paddedLayout, paddedInfo, compilerDataView);
+                }
+                else
+                {
+                    PopulateGridView(layout, info, compilerDataView);
+                }
+            }
+            else
+            {
+                compilerDataView.Rows.Clear();
             }
 
             // display computed layout.
+            if (chk_createGenerateLayout.Checked)
             {
                 LinkedList<SByteAlloc> layout = ComputeAllocs(info.m_fields);
-
-
-                int totalFreeBits;
-                int instanceBits;
-                LinkedList<SByteAlloc> paddedLayout;
-                StructInfo paddedInfo;
-                AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
-                text_computedDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
-                PopulateGridView(paddedLayout, paddedInfo, computedLayoutView);
-
-
-//                PopulateGridView(layout, info, computedLayoutView);
+                
+                if (chk_generateLayoutPadding.Checked)
+                {
+                    int totalFreeBits;
+                    int instanceBits;
+                    LinkedList<SByteAlloc> paddedLayout;
+                    StructInfo paddedInfo;
+                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
+                    text_computedDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
+                    PopulateGridView(paddedLayout, paddedInfo, computedLayoutView);
+                }
+                else
+                {
+                    PopulateGridView(layout, info, computedLayoutView);
+                }
             }
+            else
+            {
+                computedLayoutView.Rows.Clear();
+            }
+        }
+
+        private void chk_createCompiledLayout_CheckedChanged(object sender, EventArgs e)
+        {
+            ProcessSelectedStruct();
+        }
+
+        private void chk_compiledLayoutPadding_CheckedChanged(object sender, EventArgs e)
+        {
+            ProcessSelectedStruct();
+        }
+
+        private void chk_createGenerateLayout_CheckedChanged(object sender, EventArgs e)
+        {
+            ProcessSelectedStruct();
+        }
+
+        private void chk_generateLayoutPadding_CheckedChanged(object sender, EventArgs e)
+        {
+            ProcessSelectedStruct();
         }
     }
 }
