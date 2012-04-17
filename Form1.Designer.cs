@@ -31,9 +31,9 @@
             this.openPdbDialog = new System.Windows.Forms.OpenFileDialog();
             this.overViewGrid = new System.Windows.Forms.DataGridView();
             this.compilerDataView = new System.Windows.Forms.DataGridView();
-            this.text_compilerDataTotals = new System.Windows.Forms.TextBox();
+            this.text_compilerLayoutTotals = new System.Windows.Forms.TextBox();
             this.computedLayoutView = new System.Windows.Forms.DataGridView();
-            this.text_computedDataTotals = new System.Windows.Forms.TextBox();
+            this.text_generatedLayoutTotals = new System.Windows.Forms.TextBox();
             this.text_Warnings = new System.Windows.Forms.TextBox();
             this.fieldsDetailView = new System.Windows.Forms.DataGridView();
             this.label1 = new System.Windows.Forms.Label();
@@ -85,13 +85,13 @@
             this.compilerDataView.TabIndex = 2;
             this.compilerDataView.CellPainting += new System.Windows.Forms.DataGridViewCellPaintingEventHandler(this.PaintStructDetailViews);
             // 
-            // text_compilerDataTotals
+            // text_compilerLayoutTotals
             // 
-            this.text_compilerDataTotals.Location = new System.Drawing.Point(667, 378);
-            this.text_compilerDataTotals.Name = "text_compilerDataTotals";
-            this.text_compilerDataTotals.ReadOnly = true;
-            this.text_compilerDataTotals.Size = new System.Drawing.Size(267, 20);
-            this.text_compilerDataTotals.TabIndex = 3;
+            this.text_compilerLayoutTotals.Location = new System.Drawing.Point(667, 378);
+            this.text_compilerLayoutTotals.Name = "text_compilerLayoutTotals";
+            this.text_compilerLayoutTotals.ReadOnly = true;
+            this.text_compilerLayoutTotals.Size = new System.Drawing.Size(267, 20);
+            this.text_compilerLayoutTotals.TabIndex = 3;
             // 
             // computedLayoutView
             // 
@@ -109,26 +109,27 @@
             this.computedLayoutView.TabIndex = 4;
             this.computedLayoutView.CellPainting += new System.Windows.Forms.DataGridViewCellPaintingEventHandler(this.PaintStructDetailViews);
             // 
-            // text_computedDataTotals
+            // text_generatedLayoutTotals
             // 
-            this.text_computedDataTotals.Location = new System.Drawing.Point(1215, 378);
-            this.text_computedDataTotals.Name = "text_computedDataTotals";
-            this.text_computedDataTotals.ReadOnly = true;
-            this.text_computedDataTotals.Size = new System.Drawing.Size(267, 20);
-            this.text_computedDataTotals.TabIndex = 5;
+            this.text_generatedLayoutTotals.Location = new System.Drawing.Point(1215, 378);
+            this.text_generatedLayoutTotals.Name = "text_generatedLayoutTotals";
+            this.text_generatedLayoutTotals.ReadOnly = true;
+            this.text_generatedLayoutTotals.Size = new System.Drawing.Size(267, 20);
+            this.text_generatedLayoutTotals.TabIndex = 5;
             // 
             // text_Warnings
             // 
-            this.text_Warnings.Location = new System.Drawing.Point(1005, 422);
+            this.text_Warnings.Location = new System.Drawing.Point(1144, 422);
             this.text_Warnings.Multiline = true;
             this.text_Warnings.Name = "text_Warnings";
             this.text_Warnings.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.text_Warnings.Size = new System.Drawing.Size(512, 127);
+            this.text_Warnings.Size = new System.Drawing.Size(405, 328);
             this.text_Warnings.TabIndex = 6;
             this.text_Warnings.WordWrap = false;
             // 
             // fieldsDetailView
             // 
+            this.fieldsDetailView.AllowUserToAddRows = false;
             this.fieldsDetailView.AllowUserToResizeRows = false;
             this.fieldsDetailView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.fieldsDetailView.Location = new System.Drawing.Point(12, 422);
@@ -137,7 +138,7 @@
             this.fieldsDetailView.RowHeadersVisible = false;
             this.fieldsDetailView.RowHeadersWidthSizeMode = System.Windows.Forms.DataGridViewRowHeadersWidthSizeMode.AutoSizeToAllHeaders;
             this.fieldsDetailView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.fieldsDetailView.Size = new System.Drawing.Size(973, 328);
+            this.fieldsDetailView.Size = new System.Drawing.Size(1126, 328);
             this.fieldsDetailView.TabIndex = 7;
             // 
             // label1
@@ -179,7 +180,7 @@
             // label5
             // 
             this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(1008, 403);
+            this.label5.Location = new System.Drawing.Point(1141, 406);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(47, 13);
             this.label5.TabIndex = 12;
@@ -241,7 +242,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1735, 811);
+            this.ClientSize = new System.Drawing.Size(1557, 755);
             this.Controls.Add(this.chk_generateLayoutPadding);
             this.Controls.Add(this.chk_compiledLayoutPadding);
             this.Controls.Add(this.chk_createGenerateLayout);
@@ -253,9 +254,9 @@
             this.Controls.Add(this.label1);
             this.Controls.Add(this.fieldsDetailView);
             this.Controls.Add(this.text_Warnings);
-            this.Controls.Add(this.text_computedDataTotals);
+            this.Controls.Add(this.text_generatedLayoutTotals);
             this.Controls.Add(this.computedLayoutView);
-            this.Controls.Add(this.text_compilerDataTotals);
+            this.Controls.Add(this.text_compilerLayoutTotals);
             this.Controls.Add(this.compilerDataView);
             this.Controls.Add(this.overViewGrid);
             this.Name = "Form1";
@@ -278,8 +279,8 @@
         private System.Windows.Forms.DataGridView compilerDataView;
         private System.Windows.Forms.DataGridView computedLayoutView;
         
-        private System.Windows.Forms.TextBox text_compilerDataTotals;
-        private System.Windows.Forms.TextBox text_computedDataTotals;
+        private System.Windows.Forms.TextBox text_compilerLayoutTotals;
+        private System.Windows.Forms.TextBox text_generatedLayoutTotals;
         private System.Windows.Forms.TextBox text_Warnings;
         private System.Windows.Forms.DataGridView fieldsDetailView;
         private System.Windows.Forms.Label label1;

@@ -113,10 +113,11 @@ namespace ezstruct
         [Serializable]
         class SField
         {
+            public string m_Name;
+            public int m_byteOffset;
+
             public int m_AlignBits; // needed alignment.
             public int m_SizeBits; // bits we actually store
-            public int m_byteOffset;
-            public string m_Name;
 
             public bool m_IsStatic;
             public bool m_IsBitField;
@@ -125,7 +126,7 @@ namespace ezstruct
             public bool m_IsUnionMember;
             public bool m_IsArrayIndexType;
 
-            // temps
+            // .PDB specific
             public string m_typeName;
             public string m_locationType;
             public string m_symTagEnum;
@@ -134,13 +135,14 @@ namespace ezstruct
 
             public SField()
             {
-                m_AlignBits = 0;
+                m_Name = string.Empty;
                 m_byteOffset = 0;
+                m_AlignBits = 0;
+                m_SizeBits = 0;
+
                 m_IsBitField = false;
                 m_IsBool = false;
                 m_IsStatic = false;
-                m_Name = string.Empty;
-                m_SizeBits = 0;
                 m_IsPadding = false;
                 m_IsUnionMember = false;
                 m_IsArrayIndexType = false;
@@ -163,7 +165,7 @@ namespace ezstruct
 
                 if (m_SizeBits == 0)
                 {
-                    reason = "Size is 0 bits.";
+                    reason = "No storage.";
                     return false;
                 }
 
@@ -175,7 +177,7 @@ namespace ezstruct
 
                 if( m_IsBitField && (m_SizeBits > m_BitsPerByte) )
                 {
-                    reason = "Bitfields larger than " + m_BitsPerByte + " not supported.";
+                    reason = "Bitfields larger than " + m_BitsPerByte + " bit not supported.";
                     return false;
                 }
 
@@ -327,16 +329,12 @@ namespace ezstruct
                 // check BeginBit okay
                 int freeEndBit = cur.Next.Value.m_BeginBit;
                 if (alignBeginBit >= freeEndBit) // '>=': we can write to freeEndBit.
-                {
                     continue; // per construction: alignBeginBit >= freeBeginBit.
-                }
 
                 // check EndBit okay
                 int alignEndBit = alignBeginBit + field.m_SizeBits;
                 if (alignEndBit > freeEndBit) // '==' is okay since EndBit is not written to.
-                {
                     continue;
-                }
 
                 // enough space, insert field.
                 SByteAlloc fieldAlloc = new SByteAlloc();
@@ -413,10 +411,16 @@ namespace ezstruct
 
         private void Form1_Load(object sender, EventArgs BLABLABLBLBLBLBe)
         {
-            //string filename = "";
-            string filename = "C:\\Coding_Projects\\test\\Debug\\test.pdb";
+            Run();
+        }
+
+        private void Run()
+        {
+            string filename = "";
+            //string filename = "C:\\Coding_Projects\\test\\Debug\\test.pdb";
             //string filename = "C:\\Coding_Projects\\SPH\\MSPH\\Debug\\vc100.pdb";
 
+            // Popup dialog box.
             if (filename.Length == 0)
             {
                 if (openPdbDialog.ShowDialog() != DialogResult.OK)
@@ -426,108 +430,135 @@ namespace ezstruct
                 filename = openPdbDialog.FileName;
             }
 
-
-            // create a DIA session 
+            // Create a DIA session 
             IDiaDataSource diaSource = new DiaSourceClass();
             IDiaSession diaSession;
-
-            //string filename = openPdbDialog.FileName
-
             diaSource.loadDataFromPdb(filename);
             diaSource.openSession(out diaSession);
 
-            // get a list of all compilands in the global scope 
+            // Get a list of all UDT symbols in the global scope 
             IDiaEnumSymbols results;
             diaSession.findChildren(diaSession.globalScope, SymTagEnum.SymTagUDT, null, 0, out results);
 
+            // Parse symbols.
             List<StructInfo> structs = new List<StructInfo>();
             foreach (IDiaSymbol sym in results)
             {
-                //if (sym.name == "C")
-//                if (sym.name == "SrcHeader")                
+                StructInfo structInfo = null;
+                if (GetSymbolStructInfo(sym, ref structInfo))
                 {
-                    StructInfo structInfo = new StructInfo();
-                    structInfo.m_name = sym.name;
-                    structInfo.m_declaredFieldBytes = (int)sym.length;
-                    structInfo.m_instanceFieldBytes = 0;
-                    structInfo.m_instanceFieldBits = 0;
-                    structInfo.m_fields = new List<SField>();
-
-                    IDiaEnumSymbols children;
-                    sym.findChildren(SymTagEnum.SymTagNull, null, 0, out children);
-                    foreach (IDiaSymbol child in children)
-                    {
-                        if (false && child.name != "grFlags")
-                            continue;
-
-                        SField field = new SField();
-
-                        // typename
-                        if (child.type == null)
-                        {
-                            field.m_typeName = ((BasicType)child.baseType).ToString();
-                        }
-                        else
-                        {
-                            field.m_typeName = ((BasicType)child.type.baseType).ToString();
-                            field.m_symTagEnum = ((SymTagEnum)child.symTag).ToString();                            
-                        }                       
-
-                        // field size bits
-                        if (child.locationType == (uint)LocationType.LocIsBitField)
-                        {
-                            field.m_SizeBits = (int)child.length;
-                            field.m_AlignBits = field.m_SizeBits;
-
-                            // TODO support bitfields larger than a byte!
-                            field.m_IsBitField = true;
-                        }
-
-                        // disregard static fields.
-                        else if (child.locationType == (uint)LocationType.LocIsStatic)
-                        {
-                            field.m_SizeBits = (int)child.length;
-                            field.m_IsStatic = true;
-                        }
-
-                        // field size bytes
-                        else if (child.type != null)
-                        {
-                            field.m_SizeBits += m_BitsPerByte * (int)child.type.length;
-                            field.m_AlignBits = field.m_SizeBits;
-
-                            string baseType = ((BasicType)child.type.baseType).ToString();
-
-                            if (child.type.arrayIndexType != null)
-                            {
-                                field.m_IsArrayIndexType = true;
-                                field.m_AlignBits = field.m_SizeBits / (int)child.type.arrayIndexType.length; // arrays are aligned to member alignement.
-                            }
-                        }
-
-                        field.m_IsUnionMember = IsUnionMember(child);
-                        field.m_byteOffset = child.offset;
-                        field.m_Name = (child.name == null) ? "[null]" : child.name;
-
-                        field.m_locationType = ((LocationType)child.locationType).ToString();
-                        field.m_udtKind = ((UdtKind)child.udtKind).ToString();
-                        field.m_dataKind = ((DataKind)child.dataKind).ToString();
-                        if (field.m_symTagEnum == string.Empty )
-                        {
-                            field.m_symTagEnum = ((SymTagEnum)child.symTag).ToString();
-                        }
-
-                        if (child.symTag == (uint)SymTagEnum.SymTagEnum)
-                            continue;
-
-                        structInfo.m_fields.Add(field);
-                    }
-
-                    structs.Add(structInfo);
+                    structs.Add( structInfo );
                 }
             }
 
             PopulateDataTable(m_table, structs);
+        }
+
+        private bool GetSymbolStructInfo(IDiaSymbol sym, ref StructInfo structInfo)
+        {
+            //if (sym.name == "C")
+            if (sym.name != "VirtualBase1")
+            {
+                //return false;
+            }
+
+            structInfo = new StructInfo();
+            structInfo.m_name = sym.name;
+            structInfo.m_declaredFieldBytes = (int)sym.length;
+            structInfo.m_instanceFieldBytes = 0;
+            structInfo.m_instanceFieldBits = 0;
+            structInfo.m_fields = new List<SField>();
+
+            IDiaEnumSymbols children;
+            sym.findChildren(SymTagEnum.SymTagNull, null, 0, out children);
+            foreach (IDiaSymbol child in children)
+            {
+                if (false && child.name != "grFlags")
+                    continue;
+
+                SField field = new SField();
+
+                // typename
+                if (child.type == null)
+                {
+                    field.m_typeName = ((BasicType)child.baseType).ToString();
+                }
+                else
+                {
+                    field.m_typeName = ((BasicType)child.type.baseType).ToString();
+                    field.m_symTagEnum = ((SymTagEnum)child.symTag).ToString();
+                }
+
+                // V-Table
+                if (child.symTag == (uint)SymTagEnum.SymTagVTable)
+                {
+                    field.m_Name = "[V-Table]";
+                }
+
+                // field size bits
+                if (child.locationType == (uint)LocationType.LocIsBitField)
+                {
+                    field.m_SizeBits = (int)child.length;
+                    field.m_AlignBits = field.m_SizeBits;
+
+                    // TODO support bitfields larger than a byte!
+                    field.m_IsBitField = true;
+                }
+
+                // disregard static fields.
+                else if (child.locationType == (uint)LocationType.LocIsStatic)
+                {
+                    field.m_SizeBits = (int)child.length;
+                    field.m_IsStatic = true;
+                }
+
+                // field size bytes
+                else if (child.type != null)
+                {
+                    field.m_SizeBits += m_BitsPerByte * (int)child.type.length;
+                    field.m_AlignBits = field.m_SizeBits;
+
+                    string baseType = ((BasicType)child.type.baseType).ToString();
+
+                    if (child.type.arrayIndexType != null)
+                    {
+                        field.m_IsArrayIndexType = true;
+                        field.m_AlignBits = field.m_SizeBits / (int)child.type.arrayIndexType.length; // arrays are aligned to member alignement.
+                    }
+                }
+
+                field.m_IsUnionMember = IsUnionMember(child);
+                field.m_byteOffset = child.offset;
+
+                if (field.m_Name == string.Empty)
+                {
+                    if (child.name == null)
+                    {
+                        field.m_Name = "[null]";
+                    }
+                    else
+                    {
+                        field.m_Name = child.name;
+                    }
+                }
+
+                field.m_locationType = ((LocationType)child.locationType).ToString();
+                field.m_udtKind = ((UdtKind)child.udtKind).ToString();
+                field.m_dataKind = ((DataKind)child.dataKind).ToString();
+                if (field.m_symTagEnum == string.Empty)
+                {
+                    field.m_symTagEnum = ((SymTagEnum)child.symTag).ToString();
+                }
+
+                // Ignore types that do not get storage.
+                if (child.symTag == (uint)SymTagEnum.SymTagEnum
+                    || child.symTag == (uint)SymTagEnum.SymTagTypedef )
+                    continue;
+
+                structInfo.m_fields.Add(field);
+            }
+
+            return true;
         }
 
         private LinkedList<SByteAlloc> ComputeAllocs(List<SField> sourceFields)
@@ -675,24 +706,32 @@ namespace ezstruct
             return byteAllocs;
         }
 
-        private void AddPaddingFieldsToAllocsAndInfo(LinkedList<SByteAlloc> allocs, StructInfo info, out LinkedList<SByteAlloc> out_allocs, out StructInfo out_info, out int totalFreeBits, out int instanceBits)
+        private void AddPaddingFieldsToAllocsAndInfo(LinkedList<SByteAlloc> allocs, StructInfo info, out LinkedList<SByteAlloc> out_allocs, out StructInfo out_info, 
+            out int totalFreeBits, out int instanceBits, out int largestNonPadMemberBits)
         {
             out_allocs = new LinkedList<SByteAlloc>();
             out_info = DeepClone(info);                    
 
-            totalFreeBits = 0;            
+            totalFreeBits = 0;
+            largestNonPadMemberBits = 0;
+
             for (LinkedListNode<SByteAlloc> alloc = allocs.First; alloc != null; alloc = alloc.Next)
             {
+                Debug.Assert(alloc.Value.m_FieldIdx != -2);
+
                 // copy
                 LinkedListNode<SByteAlloc> out_allocNode = out_allocs.AddLast(alloc.Value);
-
-                Debug.Assert(alloc.Value.m_FieldIdx != -2);
 
                 if (alloc.Value.m_FieldIdx == -1)
                 {
                     int highestEndBit = 0;
                     foreach (SBitAlloc bitAlloc in alloc.Value.m_BitAllocs)
-                        highestEndBit = Math.Max( highestEndBit, bitAlloc.m_EndBit );
+                    {
+                        highestEndBit = Math.Max(highestEndBit, bitAlloc.m_EndBit);
+                        largestNonPadMemberBits = Math.Max(largestNonPadMemberBits, bitAlloc.m_EndBit - bitAlloc.m_BeginBit);
+                    }
+
+                    largestNonPadMemberBits = Math.Max(largestNonPadMemberBits, alloc.Value.m_EndBit - alloc.Value.m_BeginBit);
 
                     int freeBits = alloc.Value.m_EndBit - highestEndBit;
                     Debug.Assert(freeBits >= 0);
@@ -724,6 +763,8 @@ namespace ezstruct
                         break;
 
                     Debug.Assert(alloc.Value.m_FieldIdx >= 0);
+
+                    largestNonPadMemberBits = Math.Max(largestNonPadMemberBits, alloc.Value.m_EndBit - alloc.Value.m_BeginBit);
 
                     SField field = out_info.m_fields[alloc.Value.m_FieldIdx];
 
@@ -916,7 +957,7 @@ namespace ezstruct
                 string reason = string.Empty;
                 if( !field.FitForLowLevel(ref reason) )
                 {
-                    b.AppendLine("Field \"" + field.m_Name + "\" disregarded:" + reason );
+                    b.AppendLine("Field \"" + field.m_Name + "\" disregarded:  " + reason );
                     info.m_fields.RemoveAt(i);
                 }
             }
@@ -939,10 +980,12 @@ namespace ezstruct
                 {
                     int totalFreeBits;
                     int instanceBits;
+                    int largestNonPadField;
                     LinkedList<SByteAlloc> paddedLayout;
                     StructInfo paddedInfo;
-                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
-                    text_compilerDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
+                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits, out largestNonPadField);
+                    float imbalance = (instanceBits - totalFreeBits == 0) ? 0 : (float)largestNonPadField / (float)(instanceBits - totalFreeBits);
+                    text_compilerLayoutTotals.Text = "Instance bits: " + instanceBits + ", pad bits: " + totalFreeBits + ", imbalance %: " + imbalance;
                     PopulateGridView(paddedLayout, paddedInfo, compilerDataView);
                 }
                 else
@@ -964,10 +1007,12 @@ namespace ezstruct
                 {
                     int totalFreeBits;
                     int instanceBits;
+                    int largestNonPadField;
                     LinkedList<SByteAlloc> paddedLayout;
                     StructInfo paddedInfo;
-                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits);
-                    text_computedDataTotals.Text = "Instance bits: " + instanceBits + ", padding: " + totalFreeBits;
+                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo, out totalFreeBits, out instanceBits, out largestNonPadField);
+                    float imbalance = (instanceBits - totalFreeBits == 0) ? 0 : (float)largestNonPadField / (float)(instanceBits - totalFreeBits);
+                    text_generatedLayoutTotals.Text = "Instance bits: " + instanceBits + ", pad bits: " + totalFreeBits + ", imbalance %: " + imbalance;
                     PopulateGridView(paddedLayout, paddedInfo, computedLayoutView);
                 }
                 else
