@@ -419,10 +419,10 @@ namespace ezstruct
                 // enough space, insert field.
                 SByteAlloc fieldAlloc = new SByteAlloc();
                 fieldAlloc.m_BeginBit = alignBeginBit;
-                Debug.Assert(alignEndBit % m_BitsPerByte == 0);
                 fieldAlloc.m_EndBit = alignEndBit;
                 fieldAlloc.m_FieldIdx = fieldsIdx;
                 fieldAlloc.m_BitAllocs = new List<SBitAlloc>();
+                Debug.Assert(alignEndBit % m_BitsPerByte == 0);
 
                 LinkedListNode<SByteAlloc> newAlloc = allocs.AddAfter(cur, fieldAlloc);
                 return newAlloc;
@@ -534,18 +534,25 @@ namespace ezstruct
                 structs.Add( new StructInfo() );
 
             // Parse symbols.
-            int infoStorage = 0;
+            int numStored = 0;
+            int numLoops = 0;
             foreach (IDiaSymbol sym in results)
             {
-                StructInfo info = structs[infoStorage];
+                // Show progress
+                if (numLoops++ % 100 == 0)
+                {
+                    Trace.WriteLine("Parse " + numLoops + "/" + results.count);
+                }
+
+                StructInfo info = structs[numStored];
                 if (GetSymbolStructInfo(sym, ref info))
                 {
-                    infoStorage++;
+                    numStored++;
                 }
             }
 
             // Remove excess elements.
-            while (structs.Count != infoStorage)
+            while (structs.Count != numStored)
                 structs.RemoveAt(structs.Count-1);
 
             // Analyse all structs.
@@ -665,9 +672,16 @@ namespace ezstruct
 
         private Dictionary<StructInfo, AnalysisResult> AnalyseAllStructs(List<StructInfo> structs)
         {
+            int numLoops = 0;
             Dictionary<StructInfo, AnalysisResult> results = new Dictionary<StructInfo, AnalysisResult>();
             foreach (StructInfo ref_info in structs)
-            {                
+            {
+                // Show progress
+                if( numLoops++ % 100 == 0 )
+                {
+                    Trace.WriteLine("Analyse " + numLoops + "/" + structs.Count);
+                }
+
                 // Working filtered info.
                 StructInfo info = DeepClone(ref_info);
 

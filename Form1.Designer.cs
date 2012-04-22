@@ -51,6 +51,10 @@
             ((System.ComponentModel.ISupportInitialize)(this.fieldsDetailView)).BeginInit();
             this.SuspendLayout();
             // 
+            // openPdbDialog
+            // 
+            this.openPdbDialog.Filter = "Symbol files|*.pdb|All files|*.*";
+            // 
             // overViewGrid
             // 
             this.overViewGrid.AllowUserToAddRows = false;
@@ -87,7 +91,7 @@
             // 
             // text_compilerLayoutTotals
             // 
-            this.text_compilerLayoutTotals.Location = new System.Drawing.Point(667, 378);
+            this.text_compilerLayoutTotals.Location = new System.Drawing.Point(792, 376);
             this.text_compilerLayoutTotals.Name = "text_compilerLayoutTotals";
             this.text_compilerLayoutTotals.ReadOnly = true;
             this.text_compilerLayoutTotals.Size = new System.Drawing.Size(267, 20);
@@ -111,7 +115,7 @@
             // 
             // text_generatedLayoutTotals
             // 
-            this.text_generatedLayoutTotals.Location = new System.Drawing.Point(1215, 378);
+            this.text_generatedLayoutTotals.Location = new System.Drawing.Point(1265, 376);
             this.text_generatedLayoutTotals.Name = "text_generatedLayoutTotals";
             this.text_generatedLayoutTotals.ReadOnly = true;
             this.text_generatedLayoutTotals.Size = new System.Drawing.Size(267, 20);
@@ -191,7 +195,7 @@
             this.chk_createCompiledLayout.AutoSize = true;
             this.chk_createCompiledLayout.Checked = true;
             this.chk_createCompiledLayout.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chk_createCompiledLayout.Location = new System.Drawing.Point(494, 380);
+            this.chk_createCompiledLayout.Location = new System.Drawing.Point(658, 378);
             this.chk_createCompiledLayout.Name = "chk_createCompiledLayout";
             this.chk_createCompiledLayout.Size = new System.Drawing.Size(57, 17);
             this.chk_createCompiledLayout.TabIndex = 13;
@@ -204,7 +208,7 @@
             this.chk_createGenerateLayout.AutoSize = true;
             this.chk_createGenerateLayout.Checked = true;
             this.chk_createGenerateLayout.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chk_createGenerateLayout.Location = new System.Drawing.Point(1035, 380);
+            this.chk_createGenerateLayout.Location = new System.Drawing.Point(1133, 378);
             this.chk_createGenerateLayout.Name = "chk_createGenerateLayout";
             this.chk_createGenerateLayout.Size = new System.Drawing.Size(57, 17);
             this.chk_createGenerateLayout.TabIndex = 14;
@@ -217,7 +221,7 @@
             this.chk_compiledLayoutPadding.AutoSize = true;
             this.chk_compiledLayoutPadding.Checked = true;
             this.chk_compiledLayoutPadding.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chk_compiledLayoutPadding.Location = new System.Drawing.Point(557, 380);
+            this.chk_compiledLayoutPadding.Location = new System.Drawing.Point(721, 378);
             this.chk_compiledLayoutPadding.Name = "chk_compiledLayoutPadding";
             this.chk_compiledLayoutPadding.Size = new System.Drawing.Size(65, 17);
             this.chk_compiledLayoutPadding.TabIndex = 15;
@@ -230,7 +234,7 @@
             this.chk_generateLayoutPadding.AutoSize = true;
             this.chk_generateLayoutPadding.Checked = true;
             this.chk_generateLayoutPadding.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chk_generateLayoutPadding.Location = new System.Drawing.Point(1096, 380);
+            this.chk_generateLayoutPadding.Location = new System.Drawing.Point(1194, 378);
             this.chk_generateLayoutPadding.Name = "chk_generateLayoutPadding";
             this.chk_generateLayoutPadding.Size = new System.Drawing.Size(65, 17);
             this.chk_generateLayoutPadding.TabIndex = 16;
