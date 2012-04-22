@@ -127,6 +127,7 @@ namespace ezstruct
             public bool m_IsArrayIndexType;
 
             // .PDB specific
+            public uint m_SymbolId;
             public string m_typeName;
             public string m_locationType;
             public string m_symTagEnum;
@@ -188,45 +189,124 @@ namespace ezstruct
         [Serializable]
         class StructInfo
         {
+            public StructInfo()
+            {
+                m_name = string.Empty;
+                m_declaredFieldBytes = 0;
+                m_symbolId = 0;
+                m_fields = new List<SField>();
+            }
+
             public string m_name;
             public int m_declaredFieldBytes; // total bytes including static members.
-            public int m_instanceFieldBytes;
-            public int m_instanceFieldBits;
+            public int m_symbolId;
 
             public List<SField> m_fields;
         }
 
+        [Serializable]
+        class AnalysisResult
+        {
+            public bool m_validResult;
 
-        static public int m_MinAlignment = 4;
+            // compiler layout
+            public int m_compilerTotalFreeBits;
+            public int m_compilerInstanceBits;
+
+            // generated layout
+            public int m_generatedTotalFreeBits;
+            public int m_generatedInstanceBits;
+        }
+
+        static public int m_MinAlignmentBytes = 4;
         static public int m_BitsPerByte = 8;
 
         DataTable m_table = null;
 
+        struct OverViewGridRow
+        {
+            public object Name;
+            public object Declared_bytes;
+            public object Symbol_Id;
+            public object Instance_bytes;
+            public object Padding_bytes;
+            public object Savable_bytes;
+            public object Analyzed;
+            public object __data;
+
+            static public string AsName(string s) { return s.Replace("_", " "); }
+        }
+
+        // types of OverViewGridRow.
+        Dictionary<string, string> m_overViewGridRowTypes = new Dictionary<string, string> 
+        {
+            { "Name", "System.String" },
+            { "Declared_bytes", "System.Int32" },
+            { "Symbol_Id", "System.Int32" },
+            { "Instance_bytes", "System.Int32" },
+            { "Padding_bytes", "System.Int32" },
+            { "Savable_bytes", "System.Int32" },            
+            { "Analyzed", "System.String" },
+            { "__data", "System.Object" },
+        };
+          
         struct DetailRow
         {
             public object Name;
-            public object Bits;
+            public object SizeBits;
+            public object AlignBits;
             public object BeginBit;
             public object EndBit;
             public object ByteOffset;
         }
 
+
+
+        //-----------------------------------------------------------------------------
+        //-----------------------------------------------------------------------------
+        //-----------------------------------------------------------------------------
+        //-----------------------------------------------------------------------------
+        //-----------------------------------------------------------------------------
+
+
+
         public Form1()
         {
             InitializeComponent();
 
-            m_table = CreateOverViewTable();
+            m_table = CreateOverViewDataTable();
+            
+            // Init overViewGrid columns.
             overViewGrid.DataSource = m_table;
-
-            // Init layout data views.
-            foreach (var field in typeof(DetailRow).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+            // Make number columns small.
+            foreach (var field in GetPublicFields<OverViewGridRow>())
             {
-                compilerDataView.Columns.Add(field.Name, field.Name);
-                computedLayoutView.Columns.Add(field.Name, field.Name);
+                int pixWidth = 60; // for numerical
+                if (field.Name == "Name")
+                    pixWidth = 200;
+                if (field.Name == "__data")
+                    pixWidth = 0;
+
+                overViewGrid.Columns[OverViewGridRow.AsName(field.Name)].Width = pixWidth;
             }
 
-            // Init field details data view.
-            foreach (var field in typeof(SField).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+            // Init layout data view columns.
+            foreach (var field in GetPublicFields<DetailRow>() )
+            {
+                int pixWidth = 60; // for numerical
+                if (field.Name == "Name")
+                    pixWidth = 100;
+
+                compilerDataView.Columns.Add(field.Name, field.Name);
+                compilerDataView.Columns[field.Name].Width = pixWidth;
+
+                computedLayoutView.Columns.Add(field.Name, field.Name);
+                computedLayoutView.Columns[field.Name].Width = pixWidth;
+
+            }
+
+            // Init field details data view columns.
+            foreach (var field in GetPublicFields<SField>() )
             {
                 fieldsDetailView.Columns.Add(field.Name, field.Name.Replace("m_", "") );
 
@@ -242,54 +322,54 @@ namespace ezstruct
             }
         }
 
-        void PopulateDataTable(DataTable table, List<StructInfo> fields)
+        void PopulateDataTable(DataTable table, List<StructInfo> fields, Dictionary<StructInfo, AnalysisResult> results)
         {
             table.Rows.Clear();
             foreach (StructInfo info in fields)
             {
+                OverViewGridRow rowData;
+                rowData.Name = info.m_name;
+                rowData.Declared_bytes = info.m_declaredFieldBytes; 
+                rowData.Symbol_Id = info.m_symbolId;                
+                rowData.__data = (Object)info;
+                
+                // pending analysis
+                rowData.Instance_bytes = -1; 
+                rowData.Padding_bytes = -1;
+                rowData.Savable_bytes = -1;
+                rowData.Analyzed = false;
+
+                // Add analysis info
+                if (results.ContainsKey(info))
+                {
+                    AnalysisResult result = results[info];
+                    rowData.Instance_bytes = result.m_compilerInstanceBits / m_BitsPerByte;
+                    rowData.Padding_bytes = result.m_compilerTotalFreeBits / m_BitsPerByte;
+                    rowData.Savable_bytes = (result.m_compilerInstanceBits - result.m_generatedInstanceBits) / m_BitsPerByte;
+                    rowData.Analyzed = result.m_validResult;
+                }
+
+                // Add row to table.
                 DataRow row = table.NewRow();
-                row["__data"] = (Object)info;
-                row["Symbol"] = info.m_name;
-                row["Declared bytes"] = info.m_declaredFieldBytes;
-                row["Instance bytes"] = info.m_instanceFieldBytes;
-                row["Instance bits"] = info.m_instanceFieldBits;
+                foreach (var field in GetPublicFields<OverViewGridRow>() )
+                {
+                    row[OverViewGridRow.AsName(field.Name)] = field.GetValue(rowData);
+                }
                 table.Rows.Add(row);
             }
         }
 
-        DataTable CreateOverViewTable()
+        DataTable CreateOverViewDataTable()
         {
-            DataTable table = new DataTable("Symbols");
-
-            DataColumn column = new DataColumn();
-            column.ColumnName = "Symbol";
-            column.ReadOnly = true;
-            table.Columns.Add(column);
-
-            column = new DataColumn();
-            column.ColumnName = "Declared bytes";
-            column.ReadOnly = true;
-            column.DataType = System.Type.GetType("System.Int32");
-            table.Columns.Add(column);
-
-            column = new DataColumn();
-            column.ColumnName = "Instance bytes";
-            column.ReadOnly = true;
-            column.DataType = System.Type.GetType("System.Int32");
-            table.Columns.Add(column);
-
-            column = new DataColumn();
-            column.ColumnName = "Instance bits";
-            column.ReadOnly = true;
-            column.DataType = System.Type.GetType("System.Int32");
-            table.Columns.Add(column);
-
-            column = new DataColumn();
-            column.ColumnName = "__data";
-            column.ReadOnly = true;
-            column.DataType = System.Type.GetType("System.Object");
-            table.Columns.Add(column);
-
+            DataTable table = new DataTable("Symbols");            
+            foreach (var field in GetPublicFields<OverViewGridRow>() )
+            {
+                DataColumn column = new DataColumn();
+                column.ColumnName = OverViewGridRow.AsName(field.Name);
+                column.ReadOnly = true;
+                column.DataType = System.Type.GetType(m_overViewGridRowTypes[field.Name]);
+                table.Columns.Add(column);
+            }
             return table;
         }
 
@@ -332,7 +412,7 @@ namespace ezstruct
                     continue; // per construction: alignBeginBit >= freeBeginBit.
 
                 // check EndBit okay
-                int alignEndBit = alignBeginBit + field.m_SizeBits;
+                int alignEndBit = alignBeginBit + field.m_AlignBits;
                 if (alignEndBit > freeEndBit) // '==' is okay since EndBit is not written to.
                     continue;
 
@@ -367,16 +447,6 @@ namespace ezstruct
             }
         }
 
-        private bool lessThanByte(SField f)
-        {
-            return f.m_AlignBits < m_BitsPerByte && f.m_SizeBits < m_BitsPerByte;
-        }
-
-        private bool isFieldStatic(SField f)
-        {
-            return f.m_IsStatic;
-        }
-
         private bool IsUnionMember(IDiaSymbol s)
         {
             if ((UdtKind)s.udtKind == UdtKind.UdtUnion)
@@ -386,6 +456,17 @@ namespace ezstruct
                 return IsUnionMember(s.classParent);
             
             return false;
+        }
+
+        private bool DoesFieldsOverlap(SField a, SField b)
+        {
+            int a0 = a.m_byteOffset;
+            int a1 = a.m_byteOffset + a.m_SizeBits/m_BitsPerByte;
+            
+            int b0 = b.m_byteOffset;
+            int b1 = b.m_byteOffset + b.m_SizeBits/m_BitsPerByte;
+
+            return a0 < b1 && b0 < a1; // from http://www.altdevblogaday.com/2011/09/21/checking-for-interval-overlap/, we just need non-end overlap.
         }
 
         private bool VerifyFieldsValid(List<SField> fields, ref string reason)
@@ -404,6 +485,12 @@ namespace ezstruct
                         reason = "Fields \"" + f1.m_Name + "\" and \"" + f2.m_Name + "\" share byteoffset (" + f1.m_byteOffset + "). Unions not properly detected or supported!";
                         return false;
                     }
+
+                    if (DoesFieldsOverlap(f1, f2))
+                    {
+                        reason = "Fields \"" + f1.m_Name + "\" and \"" + f2.m_Name + "\" overlap!";
+                        return false;
+                    }
                 }
             }
             return true;
@@ -417,8 +504,9 @@ namespace ezstruct
         private void Run()
         {
             string filename = "";
-            //string filename = "C:\\Coding_Projects\\test\\Debug\\test.pdb";
-            //string filename = "C:\\Coding_Projects\\SPH\\MSPH\\Debug\\vc100.pdb";
+            //filename = "C:\\Coding_Projects\\test\\Debug\\test.pdb";
+            //filename = "C:\\Coding_Projects\\SPH\\MSPH\\Debug\\vc100.pdb";
+            //filename = "C:\\Coding_Projects\\ezstruct\\ezstruct\\engine.pdb";
 
             // Popup dialog box.
             if (filename.Length == 0)
@@ -440,52 +528,64 @@ namespace ezstruct
             IDiaEnumSymbols results;
             diaSession.findChildren(diaSession.globalScope, SymTagEnum.SymTagUDT, null, 0, out results);
 
+            // Prealloc storage.
+            List<StructInfo> structs = new List<StructInfo>(results.count);
+            for( int i=0, endSize = results.count; i!=endSize; ++i)            
+                structs.Add( new StructInfo() );
+
             // Parse symbols.
-            List<StructInfo> structs = new List<StructInfo>();
+            int infoStorage = 0;
             foreach (IDiaSymbol sym in results)
             {
-                StructInfo structInfo = null;
-                if (GetSymbolStructInfo(sym, ref structInfo))
+                StructInfo info = structs[infoStorage];
+                if (GetSymbolStructInfo(sym, ref info))
                 {
-                    structs.Add( structInfo );
+                    infoStorage++;
                 }
             }
 
-            PopulateDataTable(m_table, structs);
+            // Remove excess elements.
+            while (structs.Count != infoStorage)
+                structs.RemoveAt(structs.Count-1);
+
+            // Analyse all structs.
+            Dictionary<StructInfo, AnalysisResult> analysisResults = AnalyseAllStructs(structs);
+
+            PopulateDataTable(m_table, structs, analysisResults);
         }
 
         private bool GetSymbolStructInfo(IDiaSymbol sym, ref StructInfo structInfo)
         {
-            //if (sym.name == "C")
-            if (sym.name != "VirtualBase1")
+            // easy debug
+            //if (sym.name != "C")
+            if (sym.name != "ZHM5SaveData"/* || sym.length != 65128*/)
             {
                 //return false;
             }
 
-            structInfo = new StructInfo();
             structInfo.m_name = sym.name;
             structInfo.m_declaredFieldBytes = (int)sym.length;
-            structInfo.m_instanceFieldBytes = 0;
-            structInfo.m_instanceFieldBits = 0;
-            structInfo.m_fields = new List<SField>();
+            structInfo.m_symbolId = (int)sym.symIndexId;
 
             IDiaEnumSymbols children;
             sym.findChildren(SymTagEnum.SymTagNull, null, 0, out children);
             foreach (IDiaSymbol child in children)
             {
-                if (false && child.name != "grFlags")
+                // easy debug
+                if (false && child.name != "m_ContractsData")
                     continue;
 
                 SField field = new SField();
 
                 // typename
-                if (child.type == null)
+                IDiaSymbol childType = child.type; // cache
+                if (childType == null)
                 {
                     field.m_typeName = ((BasicType)child.baseType).ToString();
                 }
                 else
                 {
-                    field.m_typeName = ((BasicType)child.type.baseType).ToString();
+                    field.m_typeName = ((BasicType)childType.baseType).ToString();
                     field.m_symTagEnum = ((SymTagEnum)child.symTag).ToString();
                 }
 
@@ -513,17 +613,18 @@ namespace ezstruct
                 }
 
                 // field size bytes
-                else if (child.type != null)
+                else if (childType != null)
                 {
-                    field.m_SizeBits += m_BitsPerByte * (int)child.type.length;
+                    field.m_SizeBits += m_BitsPerByte * (int)childType.length; // '+=' for moving bitfields with byte offset.
                     field.m_AlignBits = field.m_SizeBits;
 
-                    string baseType = ((BasicType)child.type.baseType).ToString();
+                    string baseType = ((BasicType)childType.baseType).ToString();
 
-                    if (child.type.arrayIndexType != null)
+                    // Get array align bits. Filter out non-valid sizes.
+                    if (field.m_SizeBits != 0 && childType.arrayIndexType != null)
                     {
                         field.m_IsArrayIndexType = true;
-                        field.m_AlignBits = field.m_SizeBits / (int)child.type.arrayIndexType.length; // arrays are aligned to member alignement.
+                        field.m_AlignBits = field.m_SizeBits / (int)childType.count; // arrays are aligned to member alignement.
                     }
                 }
 
@@ -542,6 +643,7 @@ namespace ezstruct
                     }
                 }
 
+                field.m_SymbolId = child.symIndexId;
                 field.m_locationType = ((LocationType)child.locationType).ToString();
                 field.m_udtKind = ((UdtKind)child.udtKind).ToString();
                 field.m_dataKind = ((DataKind)child.dataKind).ToString();
@@ -559,6 +661,64 @@ namespace ezstruct
             }
 
             return true;
+        }
+
+        private Dictionary<StructInfo, AnalysisResult> AnalyseAllStructs(List<StructInfo> structs)
+        {
+            Dictionary<StructInfo, AnalysisResult> results = new Dictionary<StructInfo, AnalysisResult>();
+            foreach (StructInfo ref_info in structs)
+            {                
+                // Working filtered info.
+                StructInfo info = DeepClone(ref_info);
+
+                // Result
+                AnalysisResult result = new AnalysisResult();
+                results[ref_info] = result;
+
+                // Filter out unfit fields.
+                StringBuilder b = new StringBuilder();
+                for (int i = info.m_fields.Count - 1; i >= 0; --i)
+                {
+                    SField field = info.m_fields[i];
+                    string reason = string.Empty;
+                    if (!field.FitForLowLevel(ref reason))
+                    {
+                        b.AppendLine("Field \"" + field.m_Name + "\" disregarded:  " + reason);
+                        info.m_fields.RemoveAt(i);
+                    }
+                }
+
+                // Check if field layout is invalid.
+                string rejectReason = null;
+                if (!VerifyFieldsValid(info.m_fields, ref rejectReason))
+                {
+                    result.m_validResult = false;
+                    continue;
+                }
+                result.m_validResult = true;
+
+                // compiler layout (writes to 'result')
+                {
+                    LinkedList<SByteAlloc> layout = GetGeneratedLayoutFromStructInfo(info);
+                    LinkedList<SByteAlloc> paddedLayout;
+                    StructInfo paddedInfo;
+                    int largestNonPadField = 0;
+                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo,
+                        out result.m_compilerTotalFreeBits, out result.m_compilerInstanceBits, out largestNonPadField);
+                }
+
+                // generated layout (writes to 'result')
+                {
+                    LinkedList<SByteAlloc> layout = ComputeAllocs(info.m_fields);
+                    LinkedList<SByteAlloc> paddedLayout;
+                    StructInfo paddedInfo;
+                    int largestNonPadField;
+                    AddPaddingFieldsToAllocsAndInfo(layout, info, out paddedLayout, out paddedInfo,
+                        out result.m_generatedTotalFreeBits, out result.m_generatedInstanceBits, out largestNonPadField);
+                }
+            }
+
+            return results;
         }
 
         private LinkedList<SByteAlloc> ComputeAllocs(List<SField> sourceFields)
@@ -707,13 +867,13 @@ namespace ezstruct
         }
 
         private void AddPaddingFieldsToAllocsAndInfo(LinkedList<SByteAlloc> allocs, StructInfo info, out LinkedList<SByteAlloc> out_allocs, out StructInfo out_info, 
-            out int totalFreeBits, out int instanceBits, out int largestNonPadMemberBits)
+            out int totalFreeBits, out int instanceBits, out int largestNonPadFieldBits)
         {
             out_allocs = new LinkedList<SByteAlloc>();
             out_info = DeepClone(info);                    
 
             totalFreeBits = 0;
-            largestNonPadMemberBits = 0;
+            largestNonPadFieldBits = 0;
 
             for (LinkedListNode<SByteAlloc> alloc = allocs.First; alloc != null; alloc = alloc.Next)
             {
@@ -728,10 +888,10 @@ namespace ezstruct
                     foreach (SBitAlloc bitAlloc in alloc.Value.m_BitAllocs)
                     {
                         highestEndBit = Math.Max(highestEndBit, bitAlloc.m_EndBit);
-                        largestNonPadMemberBits = Math.Max(largestNonPadMemberBits, bitAlloc.m_EndBit - bitAlloc.m_BeginBit);
+                        largestNonPadFieldBits = Math.Max(largestNonPadFieldBits, bitAlloc.m_EndBit - bitAlloc.m_BeginBit);
                     }
 
-                    largestNonPadMemberBits = Math.Max(largestNonPadMemberBits, alloc.Value.m_EndBit - alloc.Value.m_BeginBit);
+                    largestNonPadFieldBits = Math.Max(largestNonPadFieldBits, alloc.Value.m_EndBit - alloc.Value.m_BeginBit);
 
                     int freeBits = alloc.Value.m_EndBit - highestEndBit;
                     Debug.Assert(freeBits >= 0);
@@ -740,7 +900,7 @@ namespace ezstruct
                     
                     SField padField = new SField();
                     padField.m_SizeBits = freeBits;
-                    padField.m_AlignBits = padField.m_SizeBits;
+                    padField.m_AlignBits = padField.m_SizeBits; // use SizeBits to get greedy scheme. Use 1 to disable ordering of bitallocs.
                     padField.m_Name = "[bit pad]";
                     padField.m_IsPadding = true;
                     padField.m_IsBitField = true;
@@ -764,7 +924,7 @@ namespace ezstruct
 
                     Debug.Assert(alloc.Value.m_FieldIdx >= 0);
 
-                    largestNonPadMemberBits = Math.Max(largestNonPadMemberBits, alloc.Value.m_EndBit - alloc.Value.m_BeginBit);
+                    largestNonPadFieldBits = Math.Max(largestNonPadFieldBits, alloc.Value.m_EndBit - alloc.Value.m_BeginBit);
 
                     SField field = out_info.m_fields[alloc.Value.m_FieldIdx];
 
@@ -778,7 +938,7 @@ namespace ezstruct
 
                     SField padField = new SField();
                     padField.m_SizeBits = freeBits;
-                    padField.m_AlignBits = padField.m_SizeBits;
+                    padField.m_AlignBits = field.m_AlignBits;
                     padField.m_Name = "[byte pad]";
                     padField.m_IsPadding = true;
 
@@ -789,7 +949,7 @@ namespace ezstruct
                     padByte.m_EndBit = freeEndBit;                    
                     padByte.m_FieldIdx = out_info.m_fields.Count - 1;
                     Debug.Assert(padByte.m_BeginBit < padByte.m_EndBit);
-                    Debug.Assert(freeEndBit % m_MinAlignment == 0);
+                    Debug.Assert(freeEndBit % m_MinAlignmentBytes == 0);
 
                     out_allocs.AddLast(padByte);
 
@@ -799,16 +959,21 @@ namespace ezstruct
 
             // compute tail waste due to alignment
             {
-                int alignMax = 0;
+                int maxAlignBits = 0;
                 int freeEndBit = 0;
                 foreach (SByteAlloc alloc in allocs)
                 {
-                    alignMax = Math.Max(alignMax, alloc.m_EndBit - alloc.m_BeginBit);
+                    // skip bitfields as they are smaller than minimum struct alignment.
+                    if (alloc.m_FieldIdx == -1)
+                        continue;
+
+                    SField field = info.m_fields[alloc.m_FieldIdx];
+                    maxAlignBits = Math.Max(maxAlignBits, field.m_AlignBits);
                     freeEndBit = Math.Max(freeEndBit, alloc.m_EndBit);
                 }
-                alignMax = Math.Max(m_MinAlignment, alignMax);
+                maxAlignBits = Math.Max(m_MinAlignmentBytes * m_BitsPerByte, maxAlignBits);
 
-                int alignEndBit = AlignUpward(freeEndBit, alignMax);
+                int alignEndBit = AlignUpward(freeEndBit, maxAlignBits);
                 instanceBits = alignEndBit;
 
                 int freeBits = alignEndBit - freeEndBit;
@@ -816,7 +981,7 @@ namespace ezstruct
                 {
                     SField padField = new SField();
                     padField.m_SizeBits = freeBits;
-                    padField.m_AlignBits = padField.m_SizeBits;
+                    padField.m_AlignBits = maxAlignBits;
                     padField.m_Name = "[byte pad]";
                     padField.m_IsPadding = true;
 
@@ -827,7 +992,7 @@ namespace ezstruct
                     padByte.m_EndBit = alignEndBit;                    
                     padByte.m_FieldIdx = out_info.m_fields.Count - 1;
                     Debug.Assert(padByte.m_BeginBit < padByte.m_EndBit);
-                    Debug.Assert(padByte.m_EndBit % m_MinAlignment == 0);
+                    Debug.Assert(padByte.m_EndBit % m_MinAlignmentBytes == 0);
 
                     out_allocs.AddLast(padByte);
 
@@ -867,14 +1032,28 @@ namespace ezstruct
             }
         }
 
+        private System.Reflection.FieldInfo[] GetPublicFields<T>()
+        {
+            return typeof(T).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+        }
+
         private void AddRowToView<T>(T row, System.Windows.Forms.DataGridView gridView)
         {
             List<object> dat = new List<object>();
-            foreach (var field in typeof(T).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+            foreach (var field in GetPublicFields<T>() )
             {
                 dat.Add(field.GetValue(row));
             }
             gridView.Rows.Add(dat.ToArray());
+        }
+
+        private void ClearLayoutPanes()
+        {
+            compilerDataView.Rows.Clear();
+            text_compilerLayoutTotals.Clear();
+            
+            computedLayoutView.Rows.Clear();
+            text_generatedLayoutTotals.Clear();
         }
 
         private void PopulateFieldDetailsView(StructInfo info, System.Windows.Forms.DataGridView gridView )
@@ -899,7 +1078,8 @@ namespace ezstruct
                         SField field = info.m_fields[bitAlloc.m_FieldIdx];
 
                         DetailRow row = new DetailRow();
-                        row.Bits = field.m_SizeBits;
+                        row.SizeBits = field.m_SizeBits;
+                        row.AlignBits = field.m_AlignBits;
                         row.BeginBit = bitAlloc.m_BeginBit;
                         row.EndBit = bitAlloc.m_EndBit;
                         row.Name = field.m_Name;
@@ -915,7 +1095,8 @@ namespace ezstruct
                     SField field = info.m_fields[byteAlloc.m_FieldIdx];
 
                     DetailRow row = new DetailRow();
-                    row.Bits = field.m_SizeBits;
+                    row.SizeBits = field.m_SizeBits;
+                    row.AlignBits = field.m_AlignBits;
                     row.BeginBit = byteAlloc.m_BeginBit;
                     row.EndBit = byteAlloc.m_EndBit;
                     row.Name = field.m_Name;
@@ -931,6 +1112,7 @@ namespace ezstruct
             ProcessSelectedStruct();
         }
 
+       
         private void ProcessSelectedStruct()
         {
             if (overViewGrid.SelectedRows.Count == 0)
@@ -940,7 +1122,7 @@ namespace ezstruct
 
             DataGridViewRow selectedRow = overViewGrid.SelectedRows[0];
             DataRow myRow = (selectedRow.DataBoundItem as DataRowView).Row;
-            StructInfo ref_info = (StructInfo)myRow["__data"];
+            StructInfo ref_info = (StructInfo)myRow[OverViewGridRow.AsName("__data")];
 
             Trace.WriteLine("selected " + ref_info.m_name);
 
@@ -949,7 +1131,7 @@ namespace ezstruct
             // Show field details
             PopulateFieldDetailsView(ref_info, fieldsDetailView);
 
-            // Reject unfit fields.
+            // Filter out unfit fields.
             StringBuilder b = new StringBuilder();
             for (int i = info.m_fields.Count - 1; i >= 0; --i )
             {
@@ -963,10 +1145,11 @@ namespace ezstruct
             }
             text_Warnings.Text = b.ToString();
 
-            // Check if field layout is valid.
+            // Check if field layout is invalid.
             string rejectReason = null;
             if (!VerifyFieldsValid(info.m_fields, ref rejectReason))
             {
+                ClearLayoutPanes();
                 text_Warnings.Text = rejectReason;
                 return;
             }

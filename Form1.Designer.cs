@@ -65,7 +65,7 @@
             this.overViewGrid.RowHeadersVisible = false;
             this.overViewGrid.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.overViewGrid.ShowEditingIcon = false;
-            this.overViewGrid.Size = new System.Drawing.Size(473, 347);
+            this.overViewGrid.Size = new System.Drawing.Size(641, 347);
             this.overViewGrid.TabIndex = 1;
             this.overViewGrid.SelectionChanged += new System.EventHandler(this.overViewGrid_SelectionChanged);
             // 
@@ -75,13 +75,13 @@
             this.compilerDataView.AllowUserToDeleteRows = false;
             this.compilerDataView.AllowUserToResizeRows = false;
             this.compilerDataView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.compilerDataView.Location = new System.Drawing.Point(494, 25);
+            this.compilerDataView.Location = new System.Drawing.Point(659, 25);
             this.compilerDataView.Name = "compilerDataView";
             this.compilerDataView.ReadOnly = true;
             this.compilerDataView.RowHeadersVisible = false;
             this.compilerDataView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.compilerDataView.ShowEditingIcon = false;
-            this.compilerDataView.Size = new System.Drawing.Size(535, 347);
+            this.compilerDataView.Size = new System.Drawing.Size(468, 347);
             this.compilerDataView.TabIndex = 2;
             this.compilerDataView.CellPainting += new System.Windows.Forms.DataGridViewCellPaintingEventHandler(this.PaintStructDetailViews);
             // 
@@ -99,13 +99,13 @@
             this.computedLayoutView.AllowUserToDeleteRows = false;
             this.computedLayoutView.AllowUserToResizeRows = false;
             this.computedLayoutView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.computedLayoutView.Location = new System.Drawing.Point(1035, 25);
+            this.computedLayoutView.Location = new System.Drawing.Point(1133, 25);
             this.computedLayoutView.Name = "computedLayoutView";
             this.computedLayoutView.ReadOnly = true;
             this.computedLayoutView.RowHeadersVisible = false;
             this.computedLayoutView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.computedLayoutView.ShowEditingIcon = false;
-            this.computedLayoutView.Size = new System.Drawing.Size(514, 347);
+            this.computedLayoutView.Size = new System.Drawing.Size(416, 347);
             this.computedLayoutView.TabIndex = 4;
             this.computedLayoutView.CellPainting += new System.Windows.Forms.DataGridViewCellPaintingEventHandler(this.PaintStructDetailViews);
             // 
@@ -144,7 +144,7 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(494, 6);
+            this.label1.Location = new System.Drawing.Point(656, 6);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(81, 13);
             this.label1.TabIndex = 8;
@@ -153,7 +153,7 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(1034, 5);
+            this.label2.Location = new System.Drawing.Point(1130, 6);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(88, 13);
             this.label2.TabIndex = 9;
@@ -182,9 +182,9 @@
             this.label5.AutoSize = true;
             this.label5.Location = new System.Drawing.Point(1141, 406);
             this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(47, 13);
+            this.label5.Size = new System.Drawing.Size(52, 13);
             this.label5.TabIndex = 12;
-            this.label5.Text = "Warning";
+            this.label5.Text = "Warnings";
             // 
             // chk_createCompiledLayout
             // 
