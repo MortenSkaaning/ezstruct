@@ -221,7 +221,7 @@ namespace ezstruct
         static public int m_MinAlignmentBytes = 4;
         static public int m_BitsPerByte = 8;
 
-        DataTable m_table = null;
+        DataTable m_allStructsDataTable = null;
 
         struct OverViewGridRow
         {
@@ -274,10 +274,13 @@ namespace ezstruct
         {
             InitializeComponent();
 
-            m_table = CreateOverViewDataTable();
-            
+            m_allStructsDataTable = CreateOverViewDataTable();
+
+            overViewBindingSource.DataSource = m_allStructsDataTable;
+
             // Init overViewGrid columns.
-            overViewGrid.DataSource = m_table;
+            overViewGrid.DataSource = overViewBindingSource;
+
             // Make number columns small.
             foreach (var field in GetPublicFields<OverViewGridRow>())
             {
@@ -558,7 +561,10 @@ namespace ezstruct
             // Analyse all structs.
             Dictionary<StructInfo, AnalysisResult> analysisResults = AnalyseAllStructs(structs);
 
-            PopulateDataTable(m_table, structs, analysisResults);
+            PopulateDataTable(m_allStructsDataTable, structs, analysisResults);
+
+            // Reset target
+            overViewBindingSource.Filter = null;
         }
 
         private bool GetSymbolStructInfo(IDiaSymbol sym, ref StructInfo structInfo)
@@ -1241,6 +1247,29 @@ namespace ezstruct
         private void chk_generateLayoutPadding_CheckedChanged(object sender, EventArgs e)
         {
             ProcessSelectedStruct();
+        }
+
+        private string BuildSearchFilterQuery(string filter)
+        {
+            string[] words = filter.Trim().Split( new char[]{' '}, StringSplitOptions.RemoveEmptyEntries );
+        
+            if (words.Length == 0)
+                return null;
+
+            StringBuilder s = new StringBuilder();
+            const string property = "Name";
+            for (int i = 0; i != words.Length; ++i)
+            {
+                if( i > 0 )
+                    s.Append(" AND ");
+                s.Append( property + " LIKE '%" + words[i] + "%'" );
+            }            
+            return s.ToString();
+        }
+
+        private void text_overViewFilter_TextChanged(object sender, EventArgs e)
+        {
+            overViewBindingSource.Filter = BuildSearchFilterQuery(text_overViewFilter.Text);
         }
     }
 }
