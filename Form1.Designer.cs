@@ -49,11 +49,15 @@
             this.overViewBindingSource = new System.Windows.Forms.BindingSource(this.components);
             this.text_overViewFilter = new System.Windows.Forms.TextBox();
             this.label6 = new System.Windows.Forms.Label();
+            this.label223 = new System.Windows.Forms.Label();
+            this.text_detailsViewFilter = new System.Windows.Forms.TextBox();
+            this.fieldDetailsBindingSource = new System.Windows.Forms.BindingSource(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.overViewGrid)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.compilerDataView)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.computedLayoutView)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.fieldsDetailView)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.overViewBindingSource)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.fieldDetailsBindingSource)).BeginInit();
             this.SuspendLayout();
             // 
             // openPdbDialog
@@ -265,11 +269,30 @@
             this.label6.TabIndex = 18;
             this.label6.Text = "Filter";
             // 
+            // label223
+            // 
+            this.label223.AutoSize = true;
+            this.label223.Location = new System.Drawing.Point(283, 399);
+            this.label223.Name = "label223";
+            this.label223.Size = new System.Drawing.Size(29, 13);
+            this.label223.TabIndex = 19;
+            this.label223.Text = "Filter";
+            // 
+            // text_detailsViewFilter
+            // 
+            this.text_detailsViewFilter.Location = new System.Drawing.Point(318, 396);
+            this.text_detailsViewFilter.Name = "text_detailsViewFilter";
+            this.text_detailsViewFilter.Size = new System.Drawing.Size(335, 20);
+            this.text_detailsViewFilter.TabIndex = 20;
+            this.text_detailsViewFilter.TextChanged += new System.EventHandler(this.text_detailsViewFilter_TextChanged);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1557, 755);
+            this.Controls.Add(this.text_detailsViewFilter);
+            this.Controls.Add(this.label223);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.text_overViewFilter);
             this.Controls.Add(this.chk_generateLayoutPadding);
@@ -296,6 +319,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.computedLayoutView)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.fieldsDetailView)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.overViewBindingSource)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.fieldDetailsBindingSource)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -325,6 +349,9 @@
         private System.Windows.Forms.BindingSource overViewBindingSource;
         private System.Windows.Forms.TextBox text_overViewFilter;
         private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.Label label223;
+        private System.Windows.Forms.TextBox text_detailsViewFilter;
+        private System.Windows.Forms.BindingSource fieldDetailsBindingSource;
     }
 }
 
