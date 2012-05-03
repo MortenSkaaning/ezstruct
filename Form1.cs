@@ -8,7 +8,6 @@ using System.Text;
 using System.Windows.Forms;
 using System.Runtime.Serialization.Formatters.Binary; 
 using System.IO;
-using System.Threading;
 
 using Dia2Lib;
 
@@ -223,7 +222,6 @@ namespace ezstruct
         static public int m_BitsPerByte = 8;
 
         DataTable m_table = null;
-        ProgressBar m_progressBar = null; // nice and thread-unsafe.
 
         struct OverViewGridRow
         {
@@ -276,16 +274,6 @@ namespace ezstruct
         {
             InitializeComponent();
 
-            Thread barThread = new Thread(new ThreadStart(CreateProgressBar)); // thread handle not used. Just all m_progressBar directly!
-            barThread.Start();
-            barThread.Join();
-
-            //new Thread(() => new ProgressBar().ShowDialog()).Start();
-
-
-            //CreateProgressBar();
-            //Application.Run(m_progressBar);
-
             m_table = CreateOverViewDataTable();
             
             // Init overViewGrid columns.
@@ -332,14 +320,6 @@ namespace ezstruct
                     fieldsDetailView.Columns[field.Name].Width = 50;
                 }
             }
-        }
-
-        private void CreateProgressBar()
-        {
-            ProgressBar progressBar = new ProgressBar();
-            progressBar.ShowDialog();
-            progressBar.BringToFront();
-   //         m_progressBar.Hide();
         }
 
         void PopulateDataTable(DataTable table, List<StructInfo> fields, Dictionary<StructInfo, AnalysisResult> results)
@@ -518,11 +498,6 @@ namespace ezstruct
 
         private void Form1_Load(object sender, EventArgs BLABLABLBLBLBLBe)
         {
-          //  Run();
-        }
-
-        private void load_Click(object sender, EventArgs e)
-        {
             Run();
         }
 
@@ -558,9 +533,6 @@ namespace ezstruct
             for( int i=0, endSize = results.count; i!=endSize; ++i)            
                 structs.Add( new StructInfo() );
 
-//            m_progressBar.Show();
-//            m_progressBar.BringToFront();
-
             // Parse symbols.
             int numStored = 0;
             int numLoops = 0;
@@ -570,7 +542,6 @@ namespace ezstruct
                 if (numLoops++ % 100 == 0)
                 {
                     Trace.WriteLine("Parse " + numLoops + "/" + results.count);
-//                    m_progressBar.SetParse(numLoops, results.count, sym.name);
                 }
 
                 StructInfo info = structs[numStored];
@@ -1270,6 +1241,6 @@ namespace ezstruct
         private void chk_generateLayoutPadding_CheckedChanged(object sender, EventArgs e)
         {
             ProcessSelectedStruct();
-        }        
+        }
     }
 }
