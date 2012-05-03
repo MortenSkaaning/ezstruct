@@ -183,7 +183,15 @@ namespace ezstruct
                 }
 
                 return true;
-            }            
+            }
+
+            static public string AsName(string field) { return field.Replace("m_", ""); }
+            static public string FilterTypeString(string fieldType)
+            {
+                if (fieldType == "System.Boolean")
+                    return "System.String";
+                return fieldType;
+            }
         }
 
         [Serializable]
@@ -221,7 +229,8 @@ namespace ezstruct
         static public int m_MinAlignmentBytes = 4;
         static public int m_BitsPerByte = 8;
 
-        DataTable m_table = null;
+        DataTable m_allStructsDataTable = null;
+        DataTable m_fieldDetailsDataTable = null;
 
         struct OverViewGridRow
         {
@@ -260,7 +269,7 @@ namespace ezstruct
             public object ByteOffset;
         }
 
-
+ 
 
         //-----------------------------------------------------------------------------
         //-----------------------------------------------------------------------------
@@ -274,10 +283,16 @@ namespace ezstruct
         {
             InitializeComponent();
 
-            m_table = CreateOverViewDataTable();
-            
-            // Init overViewGrid columns.
-            overViewGrid.DataSource = m_table;
+            // Init overview.
+            CreateOverViewDataTable();
+            overViewBindingSource.DataSource = m_allStructsDataTable;
+            overViewGrid.DataSource = overViewBindingSource;
+
+            // Init field details.
+            CreateFieldDetailsDataTable();
+            fieldDetailsBindingSource.DataSource = m_fieldDetailsDataTable;
+            fieldsDetailView.DataSource = fieldDetailsBindingSource;
+
             // Make number columns small.
             foreach (var field in GetPublicFields<OverViewGridRow>())
             {
@@ -308,8 +323,6 @@ namespace ezstruct
             // Init field details data view columns.
             foreach (var field in GetPublicFields<SField>() )
             {
-                fieldsDetailView.Columns.Add(field.Name, field.Name.Replace("m_", "") );
-
                 // Make number columns small.
                 if(    field.Name.Contains("m_Is") 
                     || field.Name.ToLower().Contains("size") 
@@ -317,14 +330,14 @@ namespace ezstruct
                     || field.Name.ToLower().Contains("bit")
                     )
                 {
-                    fieldsDetailView.Columns[field.Name].Width = 50;
+                    fieldsDetailView.Columns[SField.AsName(field.Name)].Width = 50;
                 }
             }
         }
 
-        void PopulateDataTable(DataTable table, List<StructInfo> fields, Dictionary<StructInfo, AnalysisResult> results)
+        void PopulateOverviewDataTable(List<StructInfo> fields, Dictionary<StructInfo, AnalysisResult> results)
         {
-            table.Rows.Clear();
+            m_allStructsDataTable.Rows.Clear();
             foreach (StructInfo info in fields)
             {
                 OverViewGridRow rowData;
@@ -350,27 +363,39 @@ namespace ezstruct
                 }
 
                 // Add row to table.
-                DataRow row = table.NewRow();
+                DataRow row = m_allStructsDataTable.NewRow();
                 foreach (var field in GetPublicFields<OverViewGridRow>() )
                 {
                     row[OverViewGridRow.AsName(field.Name)] = field.GetValue(rowData);
                 }
-                table.Rows.Add(row);
+                m_allStructsDataTable.Rows.Add(row);
             }
         }
 
-        DataTable CreateOverViewDataTable()
+        private void CreateOverViewDataTable()
         {
-            DataTable table = new DataTable("Symbols");            
+            m_allStructsDataTable = new DataTable("Symbols");            
             foreach (var field in GetPublicFields<OverViewGridRow>() )
             {
                 DataColumn column = new DataColumn();
                 column.ColumnName = OverViewGridRow.AsName(field.Name);
                 column.ReadOnly = true;
                 column.DataType = System.Type.GetType(m_overViewGridRowTypes[field.Name]);
-                table.Columns.Add(column);
+                m_allStructsDataTable.Columns.Add(column);
             }
-            return table;
+        }
+
+        private void CreateFieldDetailsDataTable()
+        {
+            m_fieldDetailsDataTable = new DataTable("FieldDetails");
+            foreach (var field in GetPublicFields<SField>())
+            {
+                DataColumn column = new DataColumn();
+                column.ColumnName = SField.AsName(field.Name);
+                column.ReadOnly = true;
+                column.DataType = System.Type.GetType( SField.FilterTypeString(field.FieldType.ToString()) );
+                m_fieldDetailsDataTable.Columns.Add(column);
+            }
         }
 
         private int AlignUpward(int alignCandidate, int alignment)
@@ -558,7 +583,10 @@ namespace ezstruct
             // Analyse all structs.
             Dictionary<StructInfo, AnalysisResult> analysisResults = AnalyseAllStructs(structs);
 
-            PopulateDataTable(m_table, structs, analysisResults);
+            PopulateOverviewDataTable( structs, analysisResults );
+
+            // Reset target
+            //overViewBindingSource.Filter = null;
         }
 
         private bool GetSymbolStructInfo(IDiaSymbol sym, ref StructInfo structInfo)
@@ -1072,10 +1100,16 @@ namespace ezstruct
 
         private void PopulateFieldDetailsView(StructInfo info, System.Windows.Forms.DataGridView gridView )
         {
-            gridView.Rows.Clear();
+            m_fieldDetailsDataTable.Rows.Clear();
             foreach (SField field in info.m_fields)
             {
-                AddRowToView(field, gridView);
+                // Add row to table.
+                DataRow row = m_fieldDetailsDataTable.NewRow();
+                foreach (var sourceField in GetPublicFields<SField>())
+                {
+                    row[SField.AsName(sourceField.Name)] = sourceField.GetValue(field);
+                }
+                m_fieldDetailsDataTable.Rows.Add(row);
             }
         }
 
@@ -1241,6 +1275,34 @@ namespace ezstruct
         private void chk_generateLayoutPadding_CheckedChanged(object sender, EventArgs e)
         {
             ProcessSelectedStruct();
+        }
+
+        private string BuildSearchFilterQuery(string filter)
+        {
+            string[] words = filter.Trim().Split( new char[]{' '}, StringSplitOptions.RemoveEmptyEntries );
+        
+            if (words.Length == 0)
+                return null;
+
+            StringBuilder s = new StringBuilder();
+            const string property = "Name";
+            for (int i = 0; i != words.Length; ++i)
+            {
+                if( i > 0 )
+                    s.Append(" AND ");
+                s.Append( property + " LIKE '%" + words[i] + "%'" );
+            }            
+            return s.ToString();
+        }
+
+        private void text_overViewFilter_TextChanged(object sender, EventArgs e)
+        {
+            overViewBindingSource.Filter = BuildSearchFilterQuery(text_overViewFilter.Text);
+        }
+
+        private void text_detailsViewFilter_TextChanged(object sender, EventArgs e)
+        {
+            fieldDetailsBindingSource.Filter = BuildSearchFilterQuery(text_detailsViewFilter.Text);
         }
     }
 }
